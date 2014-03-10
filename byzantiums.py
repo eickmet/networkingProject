@@ -2,7 +2,7 @@
 #DATE: 3/9/14
 #CLASS: CSCI 367
 #Project: Chat Server/Client
-#File: server.py
+#File: byzantiums.py
 #Professor: Michael Meehan
 
 import select
