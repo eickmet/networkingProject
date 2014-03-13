@@ -2,7 +2,7 @@
 #DATE: 3/9/14
 #CLASS: CSCI 367
 #Project: Chat Server/Client
-#File: byzantiums.py
+#File: server.py
 #Professor: Michael Meehan
 
 import select
@@ -14,7 +14,11 @@ import time
 
 BUFSIZE = 480      #Change to reflect the current BUFSIZE
 MAXPLAYERS = 30     #Max number of player in the server 
-
+#TODO: all and any working and I think that might be it. But I don't know. Do snovac so keep a track of the number of players
+#Isssue/bug when sending a strike that would be there third my server disconnects this is in sendstrike why does it exit
+#Have half the parse/statemachine working finished but cchat/schat next is cjoin/sjoin and then cstat/sstat fit in snovac
+#Get rid of obsolete code ok.
+#
 
 class Server(object):
 
@@ -36,7 +40,6 @@ class Server(object):
         self.toKill = False
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        #socket.setdefaulttimeout(10)
         try:
             self.server.bind(('',port))
         except socket.error, e:
@@ -82,13 +85,7 @@ class Server(object):
         host,name = info[0][0], info[1]
         return name
 
-    def getJoined(self,client):
-        info = self.clientTable[client]
-        return info[4]
-
     def searchNames(self, name):
-        if name == "##":
-            return True #3Meaning fo not send to client
         for c in self.clientTable:
             p = self.getName(c)
             if name == p:
@@ -113,9 +110,8 @@ class Server(object):
     def getPlayers(self):
         playerList = ''
         for i in self.clientTable:
-            if self.getName(i) != '##':
-                p = self.getName(i)
-                playerList += (p  +',')
+            p = self.getName(i)
+            playerList += (p  +',')
         playerList = playerList[:-1]   
         return playerList       #Creates a string of players currently on the server
 
@@ -131,18 +127,18 @@ class Server(object):
         print "Number of Bad Messages Almost Send: %d" %(self.msgBad)
 
     def printClientTable(self):
-        print "|    Name     ||     Address     ||  Port  || Strike || Units || Joined || SentTo || RcvFrm |"
-        print "*********************************************************************************************"
+        print "|    Name     ||     Address     ||  Port  || Strikes || Units |"
+        print "*****************************************************************"
         for i in self.clientTable:
             c = self.clientTable[i]
-            host,name,strikes,units,offical,send,recv = c[0],c[1],c[2],c[3],c[4],c[5],c[6]
+            host,name,strk,units = c[0],c[1],c[2],c[3]
             ip,port = host[0],host[1]
-            print  "|%12s :: %15s :: %6s ::   %2s   :: %5d :: %5s  :: %5d  :: %5d  |" %(name,ip,port,strikes,units,offical,send,recv)
-        print "%d players on the server" %(self.clients)
+            print  "|%12s :: %15s :: %6s :: %5s  :: %5d |" %(name,ip,port,strk,units)
+        print "There are %d players on the server" %(self.clients)
 
     def getStrikes(self,conn):
         info = self.clientTable[conn]
-        strikes = info[2]
+        host,name,strikes = info[0], info[1], info[2]
         int(strikes)
         return strikes
 
@@ -150,17 +146,26 @@ class Server(object):
         try:
             snum = self.getStrikes(conn)
             snum += 1
-            a,b,c,u,f,s,r = self.clientTable[conn]  #address, name , strikes,units,flags
-            self.clientTable[conn] = (a,b,snum,u,f,s,r)
+            a,b,c = self.clientTable[conn]
+            self.clientTable[conn] = (a,b,snum)
         except LookupError, e:
             print "Strikes Loop up error:",conn,reason,comment
             snum = 1
+
         strike = "(strike(%d)(%s))" % (snum,reason)
         self.sending(conn,strike)
         print "%s has received a %s strike Number %d: Comment: %s"%(self.getName(conn),reason,snum,comment)
         if snum >= 3:
             print "Disconnecting Client"
             self.toKill = True
+
+    def stripNon(self,line):
+        #print "Line Before:", line
+        newline = ''
+        for x in range(0,len(line)):
+            if ((ord(line[x])>=65) and (ord(line[x]) <= 90)) or ((ord(line[x])>=48) and (ord(line[x])>=48)):
+                newline += line[x]
+        return newline #Unsure if this is need I will test for it.
 
     def removeClient(self,conn):
         del self.clientTable[conn]
@@ -212,20 +217,17 @@ class Server(object):
     def allsend(self,msg,s):
         sendmsg = '(schat(%s)(%s))' %(self.getName(s),msg)
         for c in self.clientTable:
-            #if s != c: #This is to not send to themself
-            if self.getName(s) != '##':
-                self.addSend(s)
-                self.sending(c,sendmsg)
+            #if s != c:
+            self.sending(c,sendmsg)
 
-    def anysend(self,msg,s):        #Change anysend to avoid unofficalPlayers but make sure it is not in a infinte loop
+    def anysend(self,msg,s):
         sender = '(schat(%s)(%s))' %(self.getName(s),msg)
         per =random.choice(self.clientTable.keys())
         self.sending(per,sender)
 
     def sending(self,s,msg):
         try:
-            self.msgsSent +=1
-            self.addSend(s)
+            self.msgsSent +=1 
             s.send(msg)
         except socket.error, e:
             self.msgBad += 1
@@ -234,9 +236,8 @@ class Server(object):
     def sendallstat(self):
         statmsg = '(sstat(%s))' %(self.getPlayers())
         for c in self.clientTable:
-            if self.getName(c) != '##':
-                self.msgsSent += 1
-                self.sending(c,statmsg)
+            self.msgsSent += 1
+            self.sending(c,statmsg)
 
     def sendChatMessage(self,names,msg,s):
         nameNoExist = False
@@ -247,14 +248,13 @@ class Server(object):
         playerList = names.split(',')
         #print '[%s] - %s' %(fromWhom,msg)
         for p in playerList:
-            p = p.upper()
             if self.searchNames(p) == False:
                 sendmsg = '(schat(%s)(%s))' %(fromWhom,msg)
                 conn = self.getConn(p)
                 self.sending(conn,sendmsg)
-            elif p == 'ANY':
+            elif p == 'any':
                 self.anysend(msg,s)
-            elif p == 'ALL':
+            elif p == 'all':
                 self.allsend(msg,s)
             else:
                 nameNoExist = True
@@ -262,56 +262,45 @@ class Server(object):
             #print "Name does not here"
             #self.sendStrike(s,"malformed","sendChatmsg: Bad name")
 
-    def addRecv(self,s):
-        a,b,c,d,e,f,g = self.clientTable[s]
-        g+=1
-        self.clientTable[s] = (a,b,c,d,e,f,g)
-
-    def addSend(self,s):
-        a,b,c,d,e,f,g = self.clientTable[s]
-        f+=1
-        self.clientTable[s] = (a,b,c,d,e,f,g)
-
-
     #*****************************#
     ##State Machine begins below##
     #*****************************#
     # All the resync calls may have to pass in 
     # data[pos:] instead of data                                
 
-    def state0(self,data,pos,s,officalPlayer):
+    def state0(self,data,pos,s,newPlayer):
         #State 0 checks for (c if found go to state 2 else sending strike and resync  
-        #print "State 0"    
+        #print "State 0"
         if data[:2] == '(c':
-            return self.state1(data,2,s,officalPlayer)
+            return self.state1(data,2,s,newPlayer)
         else:
             #print "Sending Strike here state 0: Malformed"
             self.sendStrike(s,"malformed","State 0: Not (c:%s"%(data[:2]))
-            return self.resync(data[pos+1:],0,s,officalPlayer)
+            return self.resync(data[pos+1:],0,s,newPlayer)
 
-    def state1(self,data,pos,s,officalPlayer):
+    def state1(self,data,pos,s,newPlayer):
         #print "State 1"
-        if not officalPlayer:   #nonofficalPlayers can only sending cjoin messages 
+        if newPlayer:   #newPlayers can only sending cjoin messages 
             if data[pos:pos+5] == 'join(':
                 return self.joinS2(data,pos+5,'',s)
-        else:           #officalplayers can only sending cchat and cstat messages
+        else:           #Old players can only sending cchat and cstat messages
             if data[pos:pos+5] == 'chat(':
                 return self.chatS2(data,pos+5,'',s)
             elif data[pos:pos+5] == 'stat)':
                 return self.statS2(data,pos+5,s)
         #print "Sending Strike here state 1: Malformed"
         self.sendStrike(s,"malformed","State 1: Unknown Comd: data[i:i+5]= |%s|"%(data[pos:pos+5]))
-        return self.resync(data[pos+1:],0,s,officalPlayer)
+        return self.resync(data[pos+1:],0,s,newPlayer)
 
     def chatS2(self,data,pos,names,s):
         #print "chat state 2"
         if pos > BUFSIZE:
             #print "Message Too Large Need to Stop chat state 2"
             self.sendStrike(s,"toolong","Chat State 2-1:pos [%d]?"%(pos))
-            return self.resync(data[pos+1:],0,s,True)
+            return self.resync(data[pos+1:],0,s,False)
         if pos > len(data)-1:   #others have pos >= len(data)
             self.sendStrike(s,"malformed","Chat State 2-2:[pos %d >= len %d]?"%(pos,len(data)))
-            return self.resync(data[pos+1:],0,s,True)
+            return self.resync(data[pos+1:],0,s,False)
         if data[pos] == ')':
             #print "Name(s) to Sending to:",names
             return self.chatS3(data,pos+1,names,s)
@@ -324,26 +313,27 @@ class Server(object):
         if pos >= len(data):
             self.sendStrike(s,"malformed","Chat State 3-1:[pos %d >= len %d]? data:|%s|"%(pos,len(data)),data)
             #print "chat S4 -malformed: "
-            return True
+            return False
         if data[pos] == '(':
             return self.chatS4(data,pos+1,names,'',s)
         else:
             #print "malformed: chat S3"
             self.sendStrike(s,"malformed","Chat State 3-2: data[pos] %s != )"%(data[pos]))
-            return self.resync(data[pos+1:],0,s,True)
+            return self.resync(data[pos+1:],0,s,False)
 
     def chatS4(self,data,pos,names,msg,s):
         #print "chat state 4"
         if pos > BUFSIZE-2:
             #print "chat S4: toolong - toolong"
             self.sendStrike(s,"toolong","Chat State 4:pos %d"%(pos))
-            return self.resync(data[pos+1:],0,s,True)
+            return self.resync(data[pos+1:],0,s,False)
         if pos >= len(data):                #CHANGED FROM >
+
             self.sendStrike(s,"malformed","Chat State 4-1:pos %d line: |%s|"%(pos,data))
-            return self.resync(data[pos+1:],0,s,True)
+            return self.resync(data[pos+1:],0,s,False)
         if (ord(data[pos]) >= 32) and (ord(data[pos]) <= 126):
             #print "Striped data: |%s|%s|%s|" %(data[:pos],data[pos],data[pos+1:])
-            data = data[:pos] + data[pos:] 
+            data = data[:pos] + data[pos:] #Not Sure if this works
         if data[pos] == ')':
             return self.chatS5(data,pos+1,names,msg,s)
         else:
@@ -360,16 +350,15 @@ class Server(object):
         else:
             #print "Sending Strike here chat state 5"
             self.sendStrike(s,"malformed","Chat State 5-2: data[pos] %s != )"%(data[pos]))
-            return self.resync(data[pos+1:],0,s,True)
+            return self.resync(data[pos+1:],0,s,False)
 
     def chatS6(self,data,pos,names,msg,s): #Final State
         #print "chat state 6"
         #SendMessage and be done
         #print "Sending this schat message to", names,"msg is: (schat(FROM)(", msg,"))"
-        self.addRecv(s)
         self.sendChatMessage(names,msg,s)
         #What do I do with the lambda
-        return self.resync(data[pos:],0,s,True)
+        return self.resync(data[pos:],0,s,False)
         return True
 
     def joinS2(self,data,pos,name,s):
@@ -378,11 +367,11 @@ class Server(object):
         if pos > BUFSIZE:
             #print "Message is too long Need to stop join state 2"
             self.sendStrike(s,"toolong","Join State 2")
-            return self.resync(data[pos+1:],0,s,False)
+            return self.resync(data[pos+1:],0,s,True)
         if pos >= len(data):
             #print "Message is too long Need to stop join state 2"
             self.sendStrike(s,"malformed","Join State 2-1")
-            return self.resync(data[pos+1:],0,s,False)
+            return self.resync(data[pos+1:],0,s,True)
         if data[pos] == ')':
             #print "Name to be used:", name
             return self.joinS3(data,pos+1,name,s)
@@ -400,7 +389,7 @@ class Server(object):
     def joinS3(self,data,pos,name,s):
         if pos >= len(data):
             self.sendStrike(s,"malformed","Join State 3-1")
-            return self.resync(data[pos+1:],0,s,False)
+            return self.resync(data[pos+1:],0,s,True)
         #print "join state 3"
         #print "data[%d]- %s and name %s" %(pos,data[pos],name)
         if data[pos] == ')':
@@ -408,7 +397,7 @@ class Server(object):
         else:
             #print "Sending strike here join state 3"
             self.sendStrike(s,"malformed","Join State 3-2")
-            return self.resync(data[pos+1:],0,s,False)
+            return self.resync(data[pos+1:],0,s,True)
 
     def joinS4(self,data,pos,name,s): #Final State 
         #print "join state 3"
@@ -416,7 +405,6 @@ class Server(object):
         name = self.validateJoinName(name,s)
         players = self.getPlayers()
         smsg = "(sjoin(%s)(%s)(%s))" %(name,players,self.argString)
-        self.addRecv(s)
         self.sending(s,smsg)
         #print "Message to be sent: (sjoin(%s)(%s)(%s))" %(name,players,self.argString)
         self.joinClient(s,name)
@@ -428,17 +416,16 @@ class Server(object):
         #Finalize stat message
         players = self.getPlayers()
         statMsg ="(sstat(%s))" %(players)
-        self.addRecv(s)
         self.sending(s,statMsg)
-        return self.resync(data[pos-1],0,s,True)
+        return self.resync(data[pos-1],0,s,False)
 
-    def resync(self,data,i,s,officalPlayer): #Looks Like I Got it
+    def resync(self,data,i,s,newPlayer): #Looks Like I Got it
         #sys.stdout.write('[Resync:')
         if self.toKill: #Player has received their third strike so stop
             #sys.stdout.write('Kicked]\n')
             return False
         #print "resync state"
-        #print "Resync Data:",data," i:", i,"officalPlayer:",officalPlayer
+        #print "Resync Data:",data," i:", i,"NewPlayer:",newPlayer
         if i != 0:
             i=0
             print "IN resync i is not zero trace this:"
@@ -453,12 +440,12 @@ class Server(object):
                     #sys.stdout.write('StrikeOut: %s]\n'%(self.getName(s)))
                     return False
                 #sys.stdout.write('To Resync]\n')
-                return self.resync(data[i+1:],0,s,officalPlayer)
+                return self.resync(data[i+1:],0,s,newPlayer)
             if data[i:i+2] == '(c':
                 #print "test resync: data[%d:]: |%s|"%(i,data[i:])
                 #print "test resync: data[%d:]: |%s|"%(i+2,data[i+2:])
                 #sys.stdout.write("To S0:\'(c\')]\n")
-                return self.state1(data[i:],2,s,officalPlayer)
+                return self.state1(data[i:],2,s,newPlayer)
             i += 1
         #print "Resync: final i=%d" %i  
         #sys.stdout.write('Norm exit]\n')
@@ -470,12 +457,12 @@ class Server(object):
 
 
     def joinClient(self,client,name):
-        #self.inputs.append(client)
-        info = self.clientTable[client]
-        host,badname, strikes,units,flag,send,recv = info[0], info[1], info[2],info[3],info[4],info[5],info[6]
         self.clients += 1
-        self.clientTable[client] = (host,name,strikes,units,True,send,recv) #offically adds the client to the table
-        #self.outputs.append(client)
+        self.inputs.append(client)
+        info = self.clientTable[client]
+        host,badname, strikes,units = info[0], info[1], info[2]
+        self.clientTable[client] = (host,name,strikes,units)
+        self.outputs.append(client)
         self.sendallstat()
 
     def serves(self):
@@ -489,6 +476,7 @@ class Server(object):
                 break
             except socket.error,e:
                 break
+
             #I feel I need to get rid of most of this and replace with the state machine.
             for s in self.inputready:
                 if s == self.server:        #this is for cjoin
@@ -497,9 +485,16 @@ class Server(object):
                         print "MAX Players reached"
                         self.sending(client,'(snovac)')
                     else:
-                        self.clientTable[client] = (address,'##',0,1000,False,0,0)  #Unoffically adds the client to the table
-                        self.inputs.append(client)
-                        self.outputs.append(client)
+                        data = client.recv(BUFSIZE)
+                        self.msgsRecv +=1
+                        self.clientTable[client] = (address,'',0,1000)
+                        self.state0(data,0,client,True) 
+                        '''if cname:            #Old method of adding client to Client table
+                            self.clients += 1
+                            inputs.append(client)
+                            self.clientTable[client] = (address,cname,0)
+                            self.outputs.append(client)
+                            self.sendallstat()'''
                 elif s == sys.stdin:
                     #Built in commands to call during runtime
                     j = sys.stdin.readline().strip()
@@ -524,12 +519,10 @@ class Server(object):
                     try:
                         data = s.recv(1024)
                         self.msgsRecv += 1
-
                         #data = self.stripNon(data) 
                         #print "Sending: %s sends: %s" %(self.getName(s),data
                         if data:
-                            #print "Clients Clearance is: %s" %(self.clientTable[s][4])
-                            self.state0(data,0,s,self.clientTable[s][4])
+                            self.state0(data,0,s,False)
                             if self.toKill == True:
                                 self.toKill = False
                                 self.clients -=1

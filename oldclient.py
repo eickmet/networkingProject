@@ -1,8 +1,8 @@
 #Travis Eickmeyer
-#DATE: 3/10/14
+#DATE: 3/09/14
 #CLASS: CSCI 367
 #Project: Chat Server/Client
-#File: byzantiumc.py
+#File: client.py
 #Professor: Michael Meehan
 
 import socket
@@ -15,6 +15,8 @@ import errno
 BUFSIZE = 240
 MAXRECV = 512
 
+#TODO: Parseing the data from the recv also try this in server as well.
+# Broken pipe issue need to catch the broken pipe error. Ak other people how to do that maybe a try except thing with an exit or something like that.
 
 class Client(object):
 
@@ -36,8 +38,6 @@ class Client(object):
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((self.host,self.port))
             #Send my name
-            #if self.ai == True:    # For those that wait
-                #time.sleep(500)
             joinmsg = '(cjoin(%s))' % (self.name)
             self.sock.send(joinmsg)
             data = self.sock.recv(BUFSIZE)
@@ -113,11 +113,8 @@ class Client(object):
         return autoArr
 
     def randomPlayer(self):
-        if len(self.sendList) > 0:
-            sendTo = random.choice(self.sendList)
-            #print "Player messgae is send To: ",sendTo
-        else:
-            sendTo = random.choice(['all','any'])
+        sendTo = random.choice(self.sendList)
+        #print "Player messgae is send To: ",sendTo
         return sendTo
 
     def stripNon(self,line):    #Not used but kept in case I need it.
@@ -386,52 +383,52 @@ class Client(object):
         autoSendArr = []
         if self.man == False:
             autoSendArr = self.makeAutoArr()
+            print "<ENTER> to start Auto Mode"
         while not self.flag:
             try:            #This is different in my program
                 #Wait for input from stdin & socket
                 if self.man:
                     sys.stdout.write('%s'%self.prompt)
                     sys.stdout.flush()
-                    inputready, outputready,exceptrdy = select.select([0, self.sock], [],[])
-                else:
-                    sleepy = random.randint(1,5)
-                    inputready, outputready,exceptrdy = select.select([0, self.sock], [],[],sleepy)
-                if (not inputready or outputready or exceptrdy) and (self.man == False):
-                    data = random.choice(autoSendArr)
-                    pl = self.players
-                    #print 'Removed chatand name Data[10:] %s' %(data[10:])
-                    name = self.randomPlayer()
-                    data = "(cchat(" + name + data[10:]
-                    self.sock.send(data)
-                else:
-                    for i in inputready:
-                        if i ==0:
+                inputready, outputready,exceptrdy = select.select([0, self.sock], [],[])
+                for i in inputready:
+                    if i ==0:
+                        if self.man == False:
+                            sleepy = random.randint(1,5)
+                            time.sleep(sleepy)
+                            data = random.choice(autoSendArr)
+                            pl = self.players
+                            #print 'Removed chatand name Data[10:] %s' %(data[10:])
+                            name = self.randomPlayer()
+                            data = "(cchat(" + name + data[10:]
+                            #print 'Message to be sent: %s' %(data)
+                        else:
                             data = sys.stdin.readline().strip()
+                        if self.man:
                             print data
-                            if data == 't':
-                                data = '(cjoin(BILL))(cchat(all)(hello People on here))'
-                            if data == "c":
-                                data = '(cchat(all)(This is a test message.))'
-                            if data == 's':
-                                data = '(cstat)'
-                            if data == 'j':
-                                data = '(cjoin(BILLO))'
-                            if data == 'q':
-                                print 'Shutting down.'
-                                self.flag = True
-                                break
-                            #print "Line to be Sent:",data
-                            self.sock.send(data)
-                        elif i == self.sock:
-                            if self.man:
-                                print ''   #off for auto mode 
-                            data = self.sock.recv(MAXRECV) #Fixed for chat but not sstat yet.
-                            if not data:
-                                print 'Shutting down.'
-                                self.flag = True
-                                break
-                            else:
-                                vplret = self.parseLine(data)
+                        if data == 't':
+                            data = '(cjoin(BILL))(cchat(all)(hello People on here))'
+                        if data == "c":
+                            data = '(cchat(all)(This is a test message.))'
+                        if data == 's':
+                            data = '(cstat)'
+                        if data == 'j':
+                            data = '(cjoin(BILLO))'
+                        if data == 'q':
+                            print 'Shutting down.'
+                            self.flag = True
+                            break
+                        #print "Line to be Sent:",data
+                        self.sock.send(data)
+                    elif i == self.sock:
+                        print ''
+                        data = self.sock.recv(MAXRECV) #Fixed for chat but not sstat yet.
+                        if not data:
+                            print 'Shutting down.'
+                            self.flag = True
+                            break
+                        else:
+                            vplret = self.parseLine(data)
             except KeyboardInterrupt:
                 print 'Interrupted.'
                 self.sock.close()
