@@ -15,7 +15,6 @@ import errno
 BUFSIZE = 240
 MAXRECV = 512
 
-
 class Client(object):
 
     def __init__(self,name,debug,man,ai,host,port):
@@ -36,8 +35,8 @@ class Client(object):
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((self.host,self.port))
             #Send my name
-            #if self.ai == True:    # For those that wait
-                #time.sleep(500)
+            if self.ai == True:    # For those that wait
+                time.sleep(500)
             joinmsg = '(cjoin(%s))' % (self.name)
             self.sock.send(joinmsg)
             data = self.sock.recv(BUFSIZE)

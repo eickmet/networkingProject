@@ -14,12 +14,14 @@ import time
 
 BUFSIZE = 480      #Change to reflect the current BUFSIZE
 MAXPLAYERS = 30     #Max number of player in the server 
-
+#TODO: add Alive section to clientTable True False inorder to limit player who be allys or attacked
+#TODO: Add message section to clientTable to hold onto messages that where created during the previous phase
 
 class Server(object):
 
-    def __init__(self,timeout,lobby,player,port=36716):
+    def __init__(self,timeout=30,lobby=30,player=15,port=36716,force=1000):
         self.timestarted = time.time()
+        self.force = int(force)
         self.timeout = int(timeout)
         self.lobbyTimeout = int(lobby)
         self.minPlayers = int(player)
@@ -33,10 +35,12 @@ class Server(object):
         self.inputready =  []
         self.outputready = []
         self.inputs = []
+        self.round = 0
+        self.phase = 0
+        self.playingGame = False
         self.toKill = False
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        #socket.setdefaulttimeout(10)
         try:
             self.server.bind(('',port))
         except socket.error, e:
@@ -213,9 +217,13 @@ class Server(object):
         sendmsg = '(schat(%s)(%s))' %(self.getName(s),msg)
         for c in self.clientTable:
             #if s != c: #This is to not send to themself
-            if self.getName(s) != '##':
-                self.addSend(s)
+            if self.getName(c) != '##':
                 self.sending(c,sendmsg)
+
+    def ServerAllSend(self,msg):
+        for i in self.clientTable:
+            if self.getName(s) != '##':
+                self.sending(i,msg)
 
     def anysend(self,msg,s):        #Change anysend to avoid unofficalPlayers but make sure it is not in a infinte loop
         sender = '(schat(%s)(%s))' %(self.getName(s),msg)
@@ -237,6 +245,163 @@ class Server(object):
             if self.getName(c) != '##':
                 self.msgsSent += 1
                 self.sending(c,statmsg)
+
+    def proccessPhase1Message(self,s,name,msg):
+        #Check if message contains (PLAN,R#,PASS) or (PLAN,R#,APPROACH,ALLY,ATTACKEE)
+        #                               Round number PASS       APPROACH who to ally and who to attack
+        print "Phase 1 message: %s"%msg
+        args = msg.split(',')
+        phase = ''
+        rnd = 0
+        if len(args) == 3:
+            phase = arg[0]
+            action = args[2]
+            rnd = int(args[1])
+            if phase != "PLAN":
+                self.sendStrike(s,"malformed","Phase 1: Did not give PLAN phase gave:%s"%(phase))
+                print "Assuming Player passes or see if they send again"
+                return False 
+            if action != "PASS":
+                self.sendStrike(s,"malformed","Phase 1: Did not give PASS gave:%s"%(action))
+                print "Assuming Player passes or see if they send again"
+                return False 
+            if rnd != self.round:
+                self.sendStrike(s,"malformed","Phase 1: Not the correct Round Number:%d"%(rnd))
+                print "Assuming Player passes or see if they send again"
+                return False 
+            print "Player does not wish to make an allicance"
+        elif len(args) == 5:
+            phase = args[0]
+            action = args[2]
+            rnd = int(args[1])
+            ally = args[3]
+            attackee = args[4]
+            if phase != "PLAN":
+                self.sendStrike(s,"malformed","Phase 1: Did not give PLAN phase gave:%s"%(phase))
+                print "Assuming Player passes or see if they send again"
+                return False 
+            if action != "PASS":
+                self.sendStrike(s,"malformed","Phase 1: Did not give PASS gave:%s"%(action))
+                print "Assuming Player passes or see if they send again"
+                return False 
+            if rnd != self.round:
+                self.sendStrike(s,"malformed","Phase 1: Not the correct Round Number:%d"%(rnd))
+                print "Assuming Player passes or see if they send again"
+                return False               
+            #Check if ally exist else send strike
+            #check if attackee exist else send strike 
+            #Need to save phase 1 message somewhere to be sent in phase 2
+            #make sure ally is not himself or attacking himself Might just allow it for the stupid people
+            sendTo = self.getConn(ally)
+            allyToBe = self.getName(s)
+            phase2msg = "(schat)(SERVER)(OFFERL,%s,%s,%s))"%(self.round,allyToBe,attackee)
+            print "P1 AP: Send:%s TO:%s FROM:%s" %(phase2msg,ally,allyToBe)
+            #self.sending(sendTo,phase2msg) Might add to clientTable for message part
+            #msg = (schat(SERVER)(OFFERL,R#,ALLY,ATTACKEE))
+            #ally is 
+            return True
+        else:
+            self.sendStrike(s,"malformed","Phase 1: Not the Correct number of Arguments:%d"%(len(args)))
+            print "Assuming Player passes or see if they send again"
+            return False
+        return True
+
+    def proccessPhase2Message(self,s,name,msg):
+        #Already sent off messages to people
+        print "Phase 1 message: %s"%msg
+        args = msg.split(',')
+        if len(args) == 3:
+            decision = args[0]
+            rnd = int(args[1])
+            ally = args[2]
+            if rnd != self.round:
+                self.sendStrike(s,"malformed","Phase 2: Not the correct Round Number:%d"%(rnd))
+                print "Bad Round number sent"
+                return False
+            #check i ally is good. and has sent current client a ally message
+            ######What happens if client accepts or rejects a an ally that they did not receive a ally message from or something.
+            if action == "ACCEPT":
+                #inform origonal client of action
+                print "Client Accepted allyship from ally:%s" %(ally)
+            elif action == "REJECT":
+                #inform origonal client of action
+                print "Client Rejected allyship from ally:%s" %(ally)
+        else:
+            self.sendStrike(s,"malformed","Phase 2: Not the Correct number of Arguments:%d"%(len(args)))
+            print "Assuming Player passes or see if they send again"
+            return False
+        return True
+
+    def proccessPhase3Message(self,s,name,msg):
+        #This is the real phase what ever happens here is there real answer
+        print "Phase 3 message: %s"%msg
+        args = msg.split(',')
+        phase = ''
+        rnd = 0
+        if len(args) == 3:
+            phase = arg[0]
+            action = args[2]
+            rnd = int(args[1])
+            if phase != "ACTION":
+                self.sendStrike(s,"malformed","Phase 1: Did not give PLAN phase gave:%s"%(phase))
+                print "Assuming Player passes or see if they send again"
+                return False 
+            if action != "PASS":
+                self.sendStrike(s,"malformed","Phase 1: Did not give PASS gave:%s"%(action))
+                print "Assuming Player passes or see if they send again"
+                return False 
+            if rnd != self.round:
+                self.sendStrike(s,"malformed","Phase 1: Not the correct Round Number:%d"%(rnd))
+                print "Assuming Player passes or see if they send again"
+                return False 
+            print "Player does not wish to make an allicance"
+            #Set zero in all rows of his table
+        elif len(args) == 5:
+            phase = args[0]
+            action = args[2]
+            rnd = int(args[1])
+            attackee = args[3]
+            if phase != "ACTION":
+                self.sendStrike(s,"malformed","Phase 1: Did not give PLAN phase gave:%s"%(phase))
+                print "Assuming Player passes or see if they send again"
+                return False
+            if rnd != self.round:
+                self.sendStrike(s,"malformed","Phase 1: Not the correct Round Number:%d"%(rnd))
+                print "Assuming Player passes or see if they send again"
+                return False
+            if action != "ATTACK":
+                self.sendStrike(s,"malformed","Phase 1: Did not give PASS gave:%s"%(action))
+                print "Assuming Player passes or see if they send again"
+                return False
+            #check if attackee exits 
+            #And Then add the appropriate 1 in the battleTable
+            print "%s will Attack %s"%(self.getName(s),attackee)
+            return True
+        else:
+            self.sendStrike(s,"malformed","Phase 1: Not the Correct number of Arguments:%d"%(len(args)))
+            print "Assuming Player passes or see if they send again"
+            return False
+        return True
+
+    def sendPhase1(self):
+        msg = "(schat(SERVER)(PLAN,%s))"%(self.round)
+        print "Sent Out Phase 1 Messages"
+        self.ServerAllSend(msg)
+
+    def sendPhase2(self):
+        #send (schat(SERVER)(OFFERL,R#,ALLY,ATTACKEE)) can have more than one offer Need to figure out a way to store this for each player
+        #or
+        #Send (schat)(SERVER)(OFFERL,R#)) if no offers easy to send 
+        print "(schat)(SERVER)(OFFERL,R#))"
+
+    def sendPhase3(self):
+        msg = "(schat(SERVER)(ACTION,%s))"%(self.round)
+        print "Sent Out Phase 3 Messages"
+        self.ServerAllSend(msg)
+
+    def sendNotify(self):
+        #send notifcation messages to each client of what each client did
+        print "Send notifcation Messages here"
 
     def sendChatMessage(self,names,msg,s):
         nameNoExist = False
@@ -271,7 +436,6 @@ class Server(object):
         a,b,c,d,e,f,g = self.clientTable[s]
         f+=1
         self.clientTable[s] = (a,b,c,d,e,f,g)
-
 
     #*****************************#
     ##State Machine begins below##
@@ -367,7 +531,17 @@ class Server(object):
         #SendMessage and be done
         #print "Sending this schat message to", names,"msg is: (schat(FROM)(", msg,"))"
         self.addRecv(s)
-        self.sendChatMessage(names,msg,s)
+        if names == "SERVER":
+            if self.phase == 1:
+                self.proccessPhase1Message(s,names,msg)
+            if self.phase == 2:
+                self.proccessPhase2Message(s,names,msg)
+            if self.phase == 3:
+                self.proccessPhase3Message(s,names,msg)
+            else:
+                print "Achieved a phase beyond phase 3 or below phase 1"
+        else:
+            self.sendChatMessage(names,msg,s)
         #What do I do with the lambda
         return self.resync(data[pos:],0,s,True)
         return True
@@ -489,7 +663,13 @@ class Server(object):
                 break
             except socket.error,e:
                 break
-            #I feel I need to get rid of most of this and replace with the state machine.
+            #Start a round somewhere
+            #Need to begin phase 1 send out (schat(SERVER)(PLAN,R#))
+            if self.clients >= self.minPlayers and self.playingGame = False:
+                print "Starting Round 1"
+                self.round = 1
+                self.phase = 1
+                self.sendPhase1()
             for s in self.inputready:
                 if s == self.server:        #this is for cjoin
                     client,address = self.server.accept()
@@ -497,7 +677,7 @@ class Server(object):
                         print "MAX Players reached"
                         self.sending(client,'(snovac)')
                     else:
-                        self.clientTable[client] = (address,'##',0,1000,False,0,0)  #Unoffically adds the client to the table
+                        self.clientTable[client] = (address,'##',0,self.force,False,0,0)  #Unoffically adds the client to the table
                         self.inputs.append(client)
                         self.outputs.append(client)
                 elif s == sys.stdin:
@@ -561,11 +741,11 @@ class Server(object):
         self.server.close()
 
 if __name__ == "__main__":
-    t,l,m = 0,0,0
+    t,l,m = 20,10,5
     numArgs = len(sys.argv)
     if numArgs%2 == 0:
         print numArgs
-        print 'Usage: %s -t # -l # -m #' %(sys.argv[0])
+        print 'Usage: %s -t # -l # -m # -f #' %(sys.argv[0])
         sys.exit()
     for x in range(1,numArgs):
         if (sys.argv[x] == '-t'):
@@ -583,4 +763,7 @@ if __name__ == "__main__":
             m = int(sys.argv[x+1])
             #print "-m: ",m
             x += 1
-    Server(t,l,m).serves()
+        elif (sys.argv[x] == '-f'):
+            f = int(sys.argv[x+1])
+            x += 1
+    Server(t,l,m,f).serves()
