@@ -22,14 +22,18 @@ class Client(object):
         self.flag = False
         self.port = int(port)
         self.host = host
-        self.players = ()
+        self.players = ''
         self.sendList = ()
         self.debug = debug
         self.man = man
         self.ai = ai
+        self.playerTable = {}
         self.minplayers = 0
         self.lobbytimeout = 0
         self.actiontimeout = 0
+        self.round = 0
+        self.potentialAttackee = ''
+        self.attackee = ''
         #Connect to server at port
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -65,7 +69,8 @@ class Client(object):
         nan = '' 
         print "Here are the player currently on the server:" 
         print "********************************************"
-        for p in self.players:
+        plist = self.players.split(',')
+        for p in plist:
             if p == self.name:
                 print "%s <- YOU" %(p)
                 nan = p
@@ -119,16 +124,102 @@ class Client(object):
             sendTo = random.choice(['all','any'])
         return sendTo
 
-    def stripNon(self,line):    #Not used but kept in case I need it.
-        newline = ''
-        for x in range(0,len(line)):
-            if (ord(line[x]) >= 32 and (ord(line[x]) <= 126)):
-                newline += line[x]
-        return newline
+    def updatePlayerTable(self):
+        #need to make a player list that keep tracks of each players unit number allicances with me and betrals or not keeping his word 
+        # betrayal is someone who i made an allicece to attack a person and they attack me 
+        # A lier is someone who made and allicane and did not attack this person
+        print "Neeed to actually update the table"
+
+
+    '''def addPlayers(self):       #(units,currently Allied,times allied,Time betrayed,Time lied To)
+        for i in self.players:
+            if i not in self.playerTable:
+                print "player not in player Table so add them"
+                self.playerTable[i] = ()
+    ''' 
+
+    def handleGame(self,msg):
+        parts = msg.split(',')
+        phaseAction = parts[0]
+        self.round = parts[1]
+        print "Round recieved: %s"%self.round
+        #use phaseAction to determin how many more 
+        print "Action: %s"%phaseAction
+        if phaseAction == "PLAN": #len is 2
+            print "PHASE 1 begining send plan"
+            if self.name == "EICKMET" or self.name == "HARVEY":
+                self.potentialAttackee = "PETER" 
+                data = '(cchat(SERVER)(PLAN,%s,APPROACH,KELLY,PETER))'%self.round
+            else:
+                data = '(cchat(SERVER)(PLAN,%s,PASS))'%self.round
+            print "Message to be sent: %s"%data
+            self.sock.send(data)
+            #do phase 1 planing stuff
+        elif phaseAction == "OFFERL":   #len is 2 or 4
+            print "PHASE 2 begining send accept or decline to offer or nothing"
+            if len(parts) == 2:
+                print "NO OFFERS OF AN ALLICANCE" #meaning attack whom ever
+            elif len(parts) == 4:
+                print "AN OFFER IS HERE"
+                ally = parts[2]
+                attackee = parts[3]
+                self.attackee = attackee
+                print "Message: (cchat(SERVER)(ACCEPT,%s,%s))"%(self.round,ally)
+                self.sock.send("(cchat(SERVER)(ACCEPT,%s,%s))"%(self.round,ally))
+                print "AN OFFER OF ALLICANCE: From %s to attck %s" %(ally,attackee)
+            else:
+                print "BAD SERVER With offerl"
+            #check to see what offer I recieved
+            #check to see if allyoffer is to attack me but most likely accept all offer especially if two or more offers is to attack the same person
+            #do pahse 2 accept or decline stuff here
+        elif phaseAction == "ACCEPT":   #len is 3
+            ally = parts[2]
+            print "PHASE 2 player: %s has accepted the allicence"%ally
+            #Accepting stuff here
+        elif phaseAction == "DECLINE": # len is 3
+            ally = parts[2]
+            print "PHASE 2 player: %s has Declined the allicence"%ally
+            #declining stuff here
+        elif phaseAction == "ACTION":   # len is 2
+            print "potAtt: |%s| and Att: |%s|"%(self.potentialAttackee,self.attackee)
+            print "PHASE 3 begining tell final plan"
+            if self.attackee != '':
+                if self.potentialAttackee == self.attackee:
+                    line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,self.attackee)
+                elif self.potentialAttackee == '':
+                    print "2"
+                    line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,self.attackee)
+                else:
+                    print "3"
+                    personToAttack = random.choice([self.attackee,self.potentialAttackee])
+                    line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,personToAttack)
+            elif self.potentialAttackee != '':
+                line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,self.potentialAttackee)
+            else:
+                rawr = random.randint(1,5)
+                if rawr == 1:   #attack lowest units
+                    pers=random.choice(self.players.split(','))
+                    print "Random person attacking is: %s"%pers
+                    line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,pers)
+                else:
+                    line = "(cchat(SERVER)(ACTION,%s,PASS))"%(self.round)
+            print "Attack message: %s"%line
+            self.sock.send(line)
+            #Send who to attack or pass send len 3 or 4
+        elif phaseAction == "NOTIFY": # len is 4
+            self.attackee = ''
+            self.potentialAttackee = ''
+            attacker = parts[2]
+            attackee = parts[3]
+            print "%s has attacked %s"%(attacker,attackee)
+            print "Phase 3 ended here are the results"
+            #handle nofity messages
+        else:
+            print "SERVER sent a bad message: |%s|"%msg
 
     def checkForMore(self,line,i):
         if i >= len(line):
-            #print "Recved more"
+            print "Recved more&*******************************"
             return self.sock.recv(MAXRECV)
         return ''
             
@@ -147,9 +238,8 @@ class Client(object):
             line += self.checkForMore(line,i)
             if line[i] == ')':
                 line = line[i+1:]
-                players = players.split(',')
                 self.players = players
-                self.sendList = players
+                self.sendList = players.split(',')
                 self.sendList.append('all')
                 self.sendList.append('any')
                 self.printPlayers()
@@ -163,6 +253,7 @@ class Client(object):
             return False
 
     def doschat(self,line):
+        print "chat"
         #look for '('
         pfrom = ''
         msg = ''
@@ -199,27 +290,30 @@ class Client(object):
 
                     #looks to be a properly formatted chat message set line to Line[i:]
                     line = line[i+1:]
+                    print "From",pfrom
+                    if pfrom == "SERVER":
+                        self.handleGame(msg)
                     self.displayMessage(pfrom,msg)
                     if len(line) > 0:       #more stuff in data
                         self.parseLine(line)
                     else:
                         return True
                 else:
-                    #print "Strike Malformed missing ending )"
+                    print "S1trike Malformed missing ending )"
                     #print "Line:", line
                     return False
             else:
-                #print "Strike Malformed missing ending )"
+                print "2Strike Malformed missing ending )"
                 #print "Line:", line
                 return False
 
         else:
-            #print "Strike Malformed missing ending )"
+            print "3Strike Malformed missing ending )"
             #print "Line:", line
             return False
         return True
 
-    def dosjoin(self, line):
+    def dosjoin(self, line):    #NOTE handle the name,units stuff.
         #print "In sjoin"
         #look for '('
         name = ''
@@ -286,8 +380,7 @@ class Client(object):
         self.lobbytimeout = int(serverArgs[1])
         self.actiontimeout = int(serverArgs[2])
         self.printServerData()
-        playerList = players.split(',')
-        self.players = playerList
+        self.players = players
         self.printPlayers()
         return True
 
@@ -328,6 +421,7 @@ class Client(object):
                     line += self.checkForMore(line,i)
                     line = line[i+1:]
                     self.printStrike(num,reason)
+                    sys.exit()
                     if line == None:
                         self.parseLine(line)
                     else:
@@ -344,6 +438,7 @@ class Client(object):
         return False
 
     def parseLine(self,line):
+        print "Parse"
         line += self.checkForMore(line,0)
         if line[0] == '(':
             line += self.checkForMore(line,1)
@@ -409,8 +504,18 @@ class Client(object):
                             print data
                             if data == 't':
                                 data = '(cjoin(BILL))(cchat(all)(hello People on here))'
-                            if data == "c":
-                                data = '(cchat(all)(This is a test message.))'
+                            if data == "pp":
+                                data = '(cchat(SERVER)(PLAN,%s,PASS))'%self.round
+                            if data == "pa":
+                                data = '(cchat(SERVER)(PLAN,%s,APPROACH,KELLY,PETER))'%self.round
+                            if data == "a":
+                                data = '(cchat(SERVER)(ACCEPT,%s,JOEY))'%self.round
+                            if data == "d":
+                                data = '(cchat(SERVER)(DECLINE,%s,FRANK))'%self.round
+                            if data == "ap":
+                                data = '(cchat(SERVER)(ACTION,%s,PASS))'%self.round
+                            if data == "aa":
+                                data = '(cchat(SERVER)(ACTION,%s,ATTACK,PETER))'%self.round
                             if data == 's':
                                 data = '(cstat)'
                             if data == 'j':
@@ -419,7 +524,7 @@ class Client(object):
                                 print 'Shutting down.'
                                 self.flag = True
                                 break
-                            #print "Line to be Sent:",data
+                            print "Line to be Sent:",data
                             self.sock.send(data)
                         elif i == self.sock:
                             if self.man:
@@ -430,6 +535,7 @@ class Client(object):
                                 self.flag = True
                                 break
                             else:
+                                print "Message received: %s" %data
                                 vplret = self.parseLine(data)
             except KeyboardInterrupt:
                 print 'Interrupted.'
