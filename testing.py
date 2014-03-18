@@ -82,8 +82,6 @@ def updateUnits():  #Updates the gen table for the end of the round
         name,old,new = GenTable[i]
         GenTable[i] = (name,new,new)
 
-
-
 def updateGenTable(key,units):
     name,old,new = GenTable[key]
     GenTable[key] = (name,old,new - units)
@@ -104,7 +102,6 @@ def battle(geni, genj,a,b,off):
     updateGenTable(genj,unitsJ)
     #update unit numbers and go on to next battle
 
-
 def round(r,matrix):
     print "Battle Round",r
     for i in range(0,5):
@@ -122,7 +119,6 @@ def round(r,matrix):
                 else:
                     battle(i,j,True,False,0)     #right Now We will have two different battle is both attacking
     updateUnits()
-
 
 def getDefend(col):
     sums = 0
