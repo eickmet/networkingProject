@@ -1218,7 +1218,7 @@ class Server(object):
                                     self.sendStrike(i,"timeout","Strike for timeout. Took %d needed less than %d "%(curr,self.timeout))
 
                             self.phaseTime = time.time()
-                            self.phase =+ 1
+                            self.phase += 1
                             self.nextPhase()
                 else:
                     if self.clients >= self.minPlayers and self.playingGame == False:
