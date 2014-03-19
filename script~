@@ -23,6 +23,7 @@ python byzantiumc.py -n SOLO -m &
 python byzantiumc.py -n FORGIVE -m &
 python byzantiumc.py -n MANIPU -m &
 python byzantiumc.py -n LESTER -m &
+python byzantiumc.py -n BETRAY -m &
 python byzantiumc.py -n PASS -m &
 python byzantiumc.py -n ATTACK -m &
 python byzantiumc.py -n CAROL -m &

@@ -1,5 +1,5 @@
 #Travis Eickmeyer
-#DATE: 3/12/14
+#DATE: 3/18/14
 #CLASS: CSCI 367
 #Project: Chat Server/Client
 #File: byzantiumc.py
@@ -33,6 +33,7 @@ class Client(object):
         self.lobbytimeout = 0
         self.actiontimeout = 0
         self.round = 0
+        self.battleMatrix = [[0 for x in xrange(30) ] for x in xrange(30)]
         self.potentialAttackee = ''
         self.attackee = ''
         self.prompt = "<->"
@@ -211,126 +212,184 @@ class Client(object):
             name = random.choice(arr)
         return name 
 
+    def attackP1(self,al,att):
+        if self.playerTable[al] > self.playerTable[att]:
+            line = '(cchat(SERVER)(PLAN,%s,APPROACH,%s,%s))'%(self.round,al,att)
+            self.attackThis = al
+            self.allyThis = att
+        else:
+            line = '(cchat(SERVER)(PLAN,%s,APPROACH,%s,%s))'%(self.round,att,al)
+            self.attackThis = al
+            self.allyThis = att
+        return line
+
+    def attackP2(self,al,att):
+        line ="(cchat(SERVER)(ACCEPT,%s,%s))"%(self.round,al)
+        self.attackThis = att
+        return line,"ACCEPT"
+
+    def betrayP1(self,al,att):
+        if self.playerTable[al] > self.playerTable[att]:
+            line = '(cchat(SERVER)(PLAN,%s,APPROACH,%s,%s))'%(self.round,att,al)
+            self.attackThis = att
+            self.allyThis = al
+        else:
+            line = '(cchat(SERVER)(PLAN,%s,APPROACH,%s,%s))'%(self.round,al,att)
+            self.attackThis = att
+            self.allyThis = al
+        return line
+
+    def betrayP2(self,al,att):
+        line ="(cchat(SERVER)(ACCEPT,%s,%s))"%(self.round,al)
+        self.attackThis = al
+        return line,"ACCEPT"
+
+    def betrayA(self,a):
+        self.attackThis = a
+
+    def betrayD(self,a):
+        self.attackThis = a
+
+    def phase1(self):
+        al = self.randPlayer()
+        att = self.randPlayer()
+        if self.name == "ATTACK":       # Goal attack every time 
+            line = self.attackP1(al,att) 
+        elif self.name == "SOLO":       #Does everything solo
+            line = '(cchat(SERVER)(PLAN,%s,PASS))'%self.round 
+        elif self.name == "BETRAY":     # present ally to attack bigger guy
+            line = self.betrayP1(al,att)    
+        else:
+            if al == '' or att == '':
+                line = '(cchat(SERVER)(PLAN,%s,PASS))'%self.round
+            elif al == att:
+                line = '(cchat(SERVER)(PLAN,%s,PASS))'%self.round
+                #might send the approach plan like this
+            else:
+                self.allyThis = al
+                self.attackThis = att
+                line = '(cchat(SERVER)(PLAN,%s,APPROACH,%s,%s))'%(self.round,al,att)
+        print "Phase 1:[%s] %s"%(self.name,line)
+        return line
+
+    def offerl(self,al,att):
+        dec = ''
+        if self.name == "ATTACK":       # Goal attack every time 
+            line,dec = self.attackP2(al,att) 
+        elif self.name == "SOLO":       #Does everything solo
+            line = '(cchat(SERVER)(DECLINE,%s,%s))'%(self.round,al)
+        elif self.name == "BETRAY":     # present ally to attack bigger guy
+            line,dec = self.betrayP2(al,att)    
+        else:   #accept or decline at random more towards decline
+            ran = random.randint(1,2)
+            if ran == 1:
+                print "Accept"
+                dec = "ACCEPT"
+                line ="(cchat(SERVER)(ACCEPT,%s,%s))"%(self.round,al)
+                self.attackThis = att
+            else:
+                print "Decline"
+                dec = "DECLINE"
+                line ="(cchat(SERVER)(DECLINE,%s,%s))"%(self.round,al)
+        return line,dec
+
+    def phasePlanAC(self,al):     #my offer accepted
+        if self.name == "BETRAY":   
+            self.betrayA(al)    
+
+    def phasePlanDE(self,al):
+        if self.name == "BETRAY":    
+            self.betrayD(al)    
+        else:   #accept or decline at random
+            print "I don't care if other server"
+
 
     def handleGame(self,msg):
-        self.printTable()
-        attackPlayer = self.minUnits()
-        print attackPlayer
-        allyPlayer = self.maxUnits()
-        print attackPlayer
         parts = msg.split(',')
         phaseAction = parts[0]
         self.round = parts[1]
         print "Round recieved: %s"%self.round
         #use phaseAction to determin how many more 
-        print "Action: %s"%phaseAction
+        #print "Action: %s"%phaseAction
         if phaseAction == "PLAN": #len is 2
-            attackPlayer = self.randPlayer()
-            allyPlayer = self.randPlayer()
-            print "PHASE 1 begining send plan"
-            self.potentialAttackee = attackPlayer
-            if attackPlayer == '' or allyPlayer == '':
-                data = '(cchat(SERVER)(PLAN,%s,PASS))'%self.round
-            elif attackPlayer == allyPlayer:
-                data = '(cchat(SERVER)(PLAN,%s,PASS))'%self.round
-            else:
-                self.allyThis = allyPlayer
-                self.attackThis = attackPlayer
-                data = '(cchat(SERVER)(PLAN,%s,APPROACH,%s,%s))'%(self.round,allyPlayer,attackPlayer)
-            print "Phase 1: Message to be sent: %s"%data
+            data = self.phase1()
+            print "Plan: [%s]: %s"%(self.name,data)
             self.sock.send(data)
-            #do phase 1 planing stuff
         elif phaseAction == "OFFERL":   #len is 2 or 4
-            print "PHASE 2 begining send accept or decline to offer or nothing"
+            #print "PHASE 2 begining send accept or decine to offer or nothing"
             if len(parts) == 2:
-                print "NO OFFERS OF AN ALLICANCE" 
+                print "NO OFFERS OF AN ALLICANCE"
+                #self.phase2NO();
             elif len(parts) == 4:
                 print "AN OFFER IS HERE"
                 ally = parts[2]
                 attackee = parts[3]
-                if attackee not in self.playerTable: 
-                    msg2 ="(cchat(SERVER)(DECLINE,%s,%s))"%(self.round,ally)
-                elif ally == self.allyThis:
-                    if attackee == self.attackThis:
-                        print "C"
-                        msg2 ="(cchat(SERVER)(ACCEPT,%s,%s))"%(self.round,ally)
-                    else:
-                        print "D"
-                        msg2 ="(cchat(SERVER)(ACCEPT,%s,%s))"%(self.round,ally)
-                        self.attackThis = attackee
-                else:
-                    if attackee == self.attackThis:
-                        print "E"
-                        msg2 ="(cchat(SERVER)(ACCEPT,%s,%s))"%(self.round,ally)
-                    else:
-                        if self.troops > self.playerTable[attackee]:
-                            if self.troops > self.playerTable[ally]:
-                                msg2 ="(cchat(SERVER)(DECLINE,%s,%s))"%(self.round,ally)
-                                print "A"
-                            else:
-                                print "B"
-                                msg2 ="(cchat(SERVER)(ACCEPT,%s,%s))"%(self.round,ally)
-                                self.attackThis = attackee
-                        else:
-                            print "F"
-                            msg2 ="(cchat(SERVER)(DECLINE,%s,%s))"%(self.round,ally)
-                            #might attack this person being asshole
-                            self.attackThis = ally
-                print "phase 2: message",msg2
+                msg2,dec = self.offerl(ally,attackee)
+                #print "phase 2: message",msg2
+                print "%s: AN OFFER OF ALLICANCE: From %s to attck %s" %(dec,ally,attackee)
                 self.sock.send(msg2)
-                print "AN OFFER OF ALLICANCE: From %s to attck %s" %(ally,attackee)
             else:
                 print "BAD SERVER With offerl"
         elif phaseAction == "ACCEPT":   #len is 3
             ally = parts[2]
+            self.phasePlanAC(ally)
             print "PHASE 2 player: %s has accepted the allicence"%ally
-            if self.allyThis == ally:
-                print "Good player"
-            else:
-                print "Stupid player"
+            #if self.allyThis == ally:
+            #    print "Good player"
+            #else:
+            #    print "Stupid player"
         elif phaseAction == "DECLINE": # len is 3
             ally = parts[2]
+            self.phasePlanDE(ally)
             print "PHASE 2 player: %s has Declined the allicence"%ally
-            if self.allyThis == ally:
-                print "Has his reasons"
-            else:
-                print "stupid player"
+            #if self.allyThis == ally:
+            #    print "Has his reasons"
+            #else:
+            #    print "stupid player"
         elif phaseAction == "ACTION":   # len is 2
-            print "potAtt: |%s| and Att: |%s|"%(self.potentialAttackee,self.attackee)
-            print "Determined ally: |%s| and determinedAttckee: |%s|"%(self.allyThis,self.attackThis)
-            print "PHASE 3 begining tell final plan"
-            if self.attackThis not in self.playerTable:
-                attic = self.randPlayer()
-                line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,attic)
-            elif len(self.playerTable) <= 3:
-                attert = self.minUnits()
-                if len(self.playerTable) == 1:
-                    for ii in self.playerTable:
-                        line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,ii)
-                elif attert != '':
-                    line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,attert)
-                else:
-                    print "Uhhhh who to attack"
-                    for ii in self,playerTable:
-                        line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,ii)
-            else:
-                if self.playerTable[self.attackThis] > self.troops:
-                    #probable means I have the least number of units
-                    line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,self.attackThis)
-                else:
-                    line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,self.attackThis)
-            print "Attack message: %s"%line
+            #print "Determined ally: |%s| and determinedAttckee: |%s|"%(self.allyThis,self.attackThis)
+            #print "PHASE 3 begining tell final plan"
+            line = self.actionPhase()
+            print "[%s]: Attack message: %s"%(self.name,line)
             self.sock.send(line)
         elif phaseAction == "NOTIFY": # len is 4
-            self.attackee = ''
-            self.potentialAttackee = ''
+            self.attackThis = ''
+            self.allyThis = ''
             attacker = parts[2]
             attackee = parts[3]
-            print "%s has attacked %s"%(attacker,attackee)
-            print "Phase 3 ended here are the results"
+            print "[%s] >>> [%s]"%(attacker,attackee)
+            #print "Phase 3 ended here are the results"
             #handle nofity messages
         else:
             print "SERVER sent a bad message: |%s|"%msg
+
+    def actionPhase(self):
+        if self.attackThis not in self.playerTable: # I have no player to attack
+            print "Player does not exist yet trying to attack"
+            attic = self.randPlayer()
+            line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,attic)
+        elif len(self.playerTable) <= 3:    #There are very few players
+            if self.name == "ATTACK":
+                attic = self.maxUnits()
+            else:
+                attic = self.minUnits()
+            if len(self.playerTable) == 1:
+                    for ii in self.playerTable:
+                        line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,ii)
+            else:
+                line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,attic)
+        else: #Normal attacking
+            if self.name == "ATTACK": 
+                line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,self.attackThis)
+            elif self.name == "SOLO":
+                soloAttack = self.maxUnits()     
+                line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,soloAttack)
+            elif self.name == "BETRAY":     
+                line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,self.attackThis)
+            else:
+                attic = self.randPlayer()
+                line = "(cchat(SERVER)(ACTION,%s,ATTACK,%s))"%(self.round,attic)
+        return line
 
     def checkForMore(self,line,i):
         if i >= len(line):
@@ -367,7 +426,6 @@ class Client(object):
             return False
 
     def doschat(self,line):
-        print "chat"
         #look for '('
         pfrom = ''
         msg = ''
@@ -404,10 +462,9 @@ class Client(object):
 
                     #looks to be a properly formatted chat message set line to Line[i:]
                     line = line[i+1:]
-                    print "From",pfrom
+                    self.displayMessage(pfrom,msg)
                     if pfrom == "SERVER":
                         self.handleGame(msg)
-                    self.displayMessage(pfrom,msg)
                     if len(line) > 0:       #more stuff in data
                         self.parseLine(line)
                     else:
@@ -555,7 +612,6 @@ class Client(object):
         return False
 
     def parseLine(self,line):
-        print "Parse"
         line += self.checkForMore(line,0)
         if line[0] == '(':
             line += self.checkForMore(line,1)

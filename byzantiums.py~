@@ -158,7 +158,7 @@ class Server(object):
             if self.getName(i) != '##':
                 p = self.getName(i)
                 playerList += (p  +',')
-        playerList = playerList[:-1]
+        playerList = playerList[:-1]   
         return playerList       #Creates a string of players currently on the server
 
     def getPlayersPlus(self):
@@ -170,14 +170,14 @@ class Server(object):
                 s = self.getStrikes(i)
                 #playerList += (p + ','+ s + ',' + u + ',')
                 playerList += "%s,%d,%d,"%(p,s,u)
-        playerList = playerList[:-1]
+        playerList = playerList[:-1]   
         return playerList       #Creates a string of players currently on the server
 
     def printStrikes(self):
         for i in self.clientTable:
             s = self.getStrikes(i)
             n = self.getName(i)
-            print "%12s- %s" %(n,s)
+            print "%12s- %s" %(n,s)  
 
     def printNumMsg(self):
         print "Number of Messages Received: %d" %(self.msgsRecv)
@@ -274,7 +274,7 @@ class Server(object):
         return name
 
     def dosname(self,name,mid,end,x):
-        if self.searchNames(name+mid+end) == False: #This name does exist
+        if self.searchNames(name+mid+end) == False: #This name does exist 
             x+=1
             mid = "~"+str(x)
             if x > 9:
@@ -348,15 +348,15 @@ class Server(object):
             if phase != "PLAN":
                 self.sendStrike(s,"malformed","Phase 1: Did not give PLAN phase gave:%s"%(phase))
                 #print "Assuming Player passes or see if they send again"
-                return False
+                return False 
             if action != "PASS":
                 self.sendStrike(s,"malformed","Phase 1: Did not give PASS gave:%s"%(action))
                 #print "Assuming Player passes or see if they send again"
-                return False
+                return False 
             if rnd != self.round:
                 self.sendStrike(s,"malformed","Phase 1: Not the correct Round Number:%d"%(rnd))
                 #print "Assuming Player passes or see if they send again"
-                return False
+                return False 
             #print "Player does not wish to make an allicance"
             self.phaseRespond[s] = (True,"WAIT")
             self.playerTable[s] = True
@@ -371,12 +371,12 @@ class Server(object):
                 self.sendStrike(s,"malformed","Phase 1: Did not give PLAN phase gave:%s"%(phase))
                 #print "Assuming Player passes or see if they send again"
                 #self.phaseRespond[s] = (True,"ACTION PASS")
-                return False
+                return False 
             if action != "APPROACH":
                 self.sendStrike(s,"malformed","Phase 1: Did not give PASS gave:%s"%(action))
                 #print "Assuming Player passes or see if they send again"
                 #self.phaseRespond[s] = (True,"ACTION PASS")
-                return False
+                return False 
             if rnd != self.round:
                 self.sendStrike(s,"malformed","Phase 1: Not the correct Round Number:%d"%(rnd))
                 #print "Assuming Player passes or see if they send again"
@@ -393,7 +393,7 @@ class Server(object):
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return True
             #Check if ally exist else send strike
-            #check if attackee exist else send strike
+            #check if attackee exist else send strike 
             #Need to save phase 1 message somewhere to be sent in phase 2
             #make sure ally is not himself or attacking himself Might just allow it for the stupid people
             sec = "ALLY WITH %s TO ATTACK %s" %(ally,attackee)
@@ -406,7 +406,7 @@ class Server(object):
             #print "P1 AP: Send:%s TO:%s FROM:%s" %(phase2msg,ally,allyToBe)
             #self.sending(sendTo,phase2msg) Might add to clientTable for message part
             #msg = (schat(SERVER)(OFFERL,R#,ALLY,ATTACKEE))
-            #ally is
+            #ally is 
             return True
         else:
             self.sendStrike(s,"malformed","Phase 1: Not the Correct number of Arguments:%d"%(len(args)))
@@ -471,15 +471,15 @@ class Server(object):
             if phase != "ACTION":
                 self.sendStrike(s,"malformed","Phase 3: Did not give ACTION phase gave:%s"%(phase))
                 #print "Assuming Player passes or see if they send again"
-                return False
+                return False 
             if action != "PASS":
                 self.sendStrike(s,"malformed","Phase 3: Did not give PASS gave:%s"%(action))
                 #print "Assuming Player passes or see if they send again"
-                return False
+                return False 
             if rnd != self.round:
                 self.sendStrike(s,"malformed","Phase 3: Not the correct Round Number:%d"%(rnd))
                 #print "Assuming Player passes or see if they send again"
-                return False
+                return False 
             #print "Player does not wish attack this turn"
             self.phaseRespond[s] = (True,"ACTION PASS")
             #Set zero in all rows of his table
@@ -551,7 +551,7 @@ class Server(object):
     def sendPhase2(self): # for those who do not send a message in time they could not recieve a message with this current method
         #send (schat(SERVER)(OFFERL,R#,ALLY,ATTACKEE)) can have more than one offer Need to figure out a way to store this for each player
         #or
-        #Send (schat)(SERVER)(OFFERL,R#)) if no offers easy to send
+        #Send (schat)(SERVER)(OFFERL,R#)) if no offers easy to send 
         #print "Sent out Round %d Phase 2 Messages"%self.round
         self.clearRespond()
         for i in self.allyTable:
@@ -568,7 +568,7 @@ class Server(object):
             if self.playerTable[i]:
                 #print "Phase 2 no offer msg",self.getName(i),self.playerTable[i]
                 self.phaseRespond[i] = (True,'')
-                #print "Phase 2:[%s] Got no offers"%(self.getName(i))    # Expect no response from these people
+                #print "Phase 2:[%s] Got no offers"%(self.getName(i))    # Expect no response from these people 
                 self.sending(i,msg)
         self.playerTable = {}
 
@@ -727,7 +727,7 @@ class Server(object):
                 if i in self.attackTable[j]:
                     if j in self.attackTable[i]:
                         #print "found",i,"and then ",j
-                        self.engagedTable[i] -= 1
+                        self.engagedTable[i] -= 1 
             #print i,"attack",self.attackTable[i]
         #for i in self.engagedTable:
             #print i,"has",self.engagedTable[i],"engagments total"
@@ -762,7 +762,7 @@ class Server(object):
             a,b,c,d,e,f,g,h = self.clientTable[i]
             r = self.tempTroopTable[b]
             #check if b is not dead
-            if r == 0:
+            if r == 0:                          
                 r = d
             if r > 99999:
                 r = 99999
@@ -818,9 +818,9 @@ class Server(object):
             batUnitsA,batUnitsB = self.duelAttackRoll(batUnitsA,batUnitsB,False)
         self.tempTroopTable[attA] += batUnitsA
         self.tempTroopTable[attB] += batUnitsB
-        #need to put results in a temp table then after all battles update clientTable units
+        #need to put results in a temp table then after all battles update clientTable units 
 
-        #Get the number of troop they should both have
+        #Get the number of troop they should both have 
         #repeat unitl one has half the troops they statrted with.
 
     def duelDeathBattle(self,aa,bb):
@@ -867,7 +867,7 @@ class Server(object):
             a -= 1
         if c:
             if a == 0 or b == 0:
-                return a,b
+                return a,b           
         if aRolls[2] == bRolls[2]:
             self.equalRolls += 1
             #print "Nothing happens2"
@@ -958,7 +958,7 @@ class Server(object):
 
     #*****************************#
     ##State Machine begins below##
-    #*****************************#
+    #*****************************#                              
     def state0(self,data,pos,s,officalPlayer):
         if data[:2] == '(c':
             return self.state1(data,2,s,officalPlayer)
@@ -968,7 +968,7 @@ class Server(object):
 
     def state1(self,data,pos,s,officalPlayer):
         #print "State 1"
-        if not officalPlayer:   #nonofficalPlayers can only sending cjoin messages
+        if not officalPlayer:   #nonofficalPlayers can only sending cjoin messages 
             if data[pos:pos+5] == 'join(':
                 return self.joinS2(data,pos+5,'',s)
         else:           #officalplayers can only sending cchat and cstat messages
@@ -1010,7 +1010,7 @@ class Server(object):
             self.sendStrike(s,"malformed","Chat State 4-1:pos %d line: |%s|"%(pos,data))
             return self.resync(data[pos+1:],0,s,True)
         if (ord(data[pos]) >= 32) and (ord(data[pos]) <= 126):
-            data = data[:pos] + data[pos:]
+            data = data[:pos] + data[pos:] 
         if data[pos] == ')':
             return self.chatS5(data,pos+1,names,msg,s)
         else:
@@ -1073,7 +1073,7 @@ class Server(object):
             self.sendStrike(s,"malformed","Join State 3-2")
             return self.resync(data[pos+1:],0,s,False)
 
-    def joinS4(self,data,pos,name,s): #Final State
+    def joinS4(self,data,pos,name,s): #Final State 
         name = self.validateJoinName(name,s)
         players = self.getPlayers()
         smsg = "(sjoin(%s)(%s)(%s))" %(name,players,self.argString) #need to update this with names,units...
@@ -1199,7 +1199,7 @@ class Server(object):
                         self.clientTable[conn] =(a,b,c,d,e,f,g,h)
                         print "*"*30
                         print "{:<15s} {:<5} times".format(self.foundWinner,self.getWins(conn))
-                        print "*"*30
+                        print "*"*30 
                         #Found a winner need to get the name of winner self.winnerName or something
                         #print "I found a Winner display winner name then start a new round."
                         self.playingGame = False
@@ -1212,13 +1212,11 @@ class Server(object):
                         if ((curr - self.phaseTime) > self.timeout) and (self.playingGame == True):
                             self.printRespond()
                             for i in self.phaseRespond:
-                                #waiting on this
+                                #waiting on this 
                                 info = self.phaseRespond[i]
                                 if info[0] == False:
                                     self.sendStrike(i,"timeout","Strike for timeout. Took %d needed less than %d "%(curr,self.timeout))
-
                             self.phaseTime = time.time()
-                            self.phase =+ 1
                             self.nextPhase()
                 else:
                     if self.clients >= self.minPlayers and self.playingGame == False:
@@ -1256,10 +1254,10 @@ class Server(object):
                     j = sys.stdin.readline().strip()
                     if j == 't':    #prints amount of time elapsed
                         self.getTime()
-                    elif j.lower() == 'q':
+                    elif j.lower() == 'q': 
                         print "Exiting Server"
-                        running = 0
-                    elif j == 's':  #prints strikes
+                        running = 0 
+                    elif j == 's':  #prints strikes 
                         self.printStrikes()
                     elif j =='c':   #prints clientTable
                         self.printClientTable()
@@ -1280,7 +1278,7 @@ class Server(object):
                         data = s.recv(1024)
                         self.msgsRecv += 1
 
-                        #data = self.stripNon(data)
+                        #data = self.stripNon(data) 
                         #print "Sending: %s sends: %s" %(self.getName(s),data
                         if data:
                             #print "Clients Clearance is: %s" %(self.clientTable[s][4])
@@ -1309,8 +1307,8 @@ class Server(object):
                         self.inputs.remove(s)
                         self.outputs.remove(s)
                         self.removeClient(s)
-                        self.sendallstat(False)
-        self.printalive()
+                        self.sendallstat(False)       
+        self.printalive()     
         self.getTime()
         self.printClientTable()
         self.printNumMsg()
