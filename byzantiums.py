@@ -20,7 +20,7 @@ MAXINT = 99999
 
 class Server(object):
 
-    def __init__(self,timeout=30,lobby=30,player=3,force=1000,port=36716):
+    def __init__(self,timeout,lobby,player,force=1000,port=36716):
         self.timestarted = time.time()
         self.playGame = True
         self.force = int(force)
@@ -43,9 +43,7 @@ class Server(object):
         self.allyTable = []
         self.playerTable = {}
         self.newPlayer = []
-        self.battleMatrix = [[0 for x in xrange(30) ] for x in xrange(30)]
-        print "btmatcol",len(self.battleMatrix[0])
-        print "btmatrow",len(self.battleMatrix)
+        self.battleMatrix = [[0 for x in xrange(40) ] for x in xrange(40)]
         self.phaseTime = 0
         self.playingGame = False
         self.notWaiting = True
@@ -64,6 +62,7 @@ class Server(object):
         self.defendTable = {}
         self.engagedTable = {}
         self.defeated = {}
+        self.removeList = {}
         self.equalRolls = 0
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -218,7 +217,7 @@ class Server(object):
         self.sending(conn,strike)
         print "%s has received a %s strike Number %d: Comment: %s"%(self.getName(conn),reason,snum,comment)
         if snum >= 3:
-            if snum >=4:
+            if snum >=3:
                 self.clients -=1
                 conn.close()
                 self.inputs.remove(conn)
@@ -239,7 +238,9 @@ class Server(object):
         if conn in self.playerTable:
             del self.playerTable[conn]
         if conn in self.phaseRespond:
-            del self.phaseRespond[conn]
+            self.phaseRespond[conn] = (True,'')
+            self.removeList[conn] = True
+            #del self.phaseRespond[conn]
         del self.clientTable[conn]
         conn.close()
 
@@ -341,6 +342,7 @@ class Server(object):
         args = msg.split(',')
         phase = ''
         rnd = 0
+        #print "Phase 1: Message recv:",msg
         if len(args) == 3:
             phase = args[0]
             action = args[2]
@@ -446,7 +448,7 @@ class Server(object):
                 self.sending(self.getConn(ally),line)
             elif decision == "DECLINE":
                 self.recvOffers +=1
-                self.phaseRespond[s] = (True,'')
+                self.phaseRespond[s] = (True,'DECLINE')
                 #inform origonal client of action
                 #print "%s Rejected allyship from ally:%s" %(self.getName(s),ally)
             else:
@@ -556,20 +558,28 @@ class Server(object):
         self.clearRespond()
         for i in self.allyTable:
             s = i[0]
-            self.playerTable[s] = False
-            msg = i[1]
-            #print msg
-            self.sentOffers +=1
-            self.sending(s,msg)
-            #print "Phase 2:[%s] Got alliance message"%self.getName(s)
+            if s in self.clientTable:
+
+                self.playerTable[s] = False
+                msg = i[1]
+                #print msg
+                self.sentOffers +=1
+                self.sending(s,msg)
+                #print "Phase 2:[%s] Got alliance message"%self.getName(s)
+            #else:
+                #print "Player has been kicked recently got an alliance"
         self.allyTable = []
         msg = "(schat(SERVER)(OFFERL,%d))"%self.round
         for i in self.playerTable:
             if self.playerTable[i]:
-                #print "Phase 2 no offer msg",self.getName(i),self.playerTable[i]
-                self.phaseRespond[i] = (True,'')
-                #print "Phase 2:[%s] Got no offers"%(self.getName(i))    # Expect no response from these people
-                self.sending(i,msg)
+                if i in self.clientTable:   
+                    #print "Phase 2 no offer msg",self.getName(i),self.playerTable[i]
+                    self.phaseRespond[i] = (True,'')
+                    #print "Phase 2:[%s] Got no offers"%(self.getName(i))    # Expect no response from these people
+                    self.sending(i,msg)
+                #else:
+                    #print "PLayer who has been kicked received no offers"
+        #print "ptable len",len(self.playerTable)    
         self.playerTable = {}
 
     def sendPhase3(self):       #(schat(SERVER)(ACTION,R#))
@@ -741,7 +751,7 @@ class Server(object):
                         self.attackTable[j].remove(i)
                         self.attackTable[i].remove(j)
                     else:
-                        print "{:<14} Attacks {:>14}".format(i,j)
+                        print "{:<14} Attacks {:>14}".format(j,i)
                         self.normalBattle(i,j)
         #update troop info
         for g in self.defeated:
@@ -1113,18 +1123,22 @@ class Server(object):
 
     def nextPhase(self):
         if self.phase == 1:
+            print "P1: Begin"
             #print "Starting Round %d"%self.round
             self.phase = 2
             self.sendPhase2()
             self.phaseTime = time.time()
-        elif self.phase == 2 and (self.recvOffers == self.sentOffers):
-            self.recvOffers = 0
-            self.sentOffers = 0
-            self.phase = 3
-            self.zeroBattleTable()
-            self.sendPhase3()
-            self.phaseTime = time.time()
+        elif self.phase == 2:
+            if (self.recvOffers == self.sentOffers): #This is so not to go on until Everybody has repsoned
+                print "P2: Begin",self.phase
+                self.recvOffers = 0
+                self.sentOffers = 0
+                self.phase = 3
+                self.zeroBattleTable()
+                self.sendPhase3()
+                self.phaseTime = time.time()
         elif self.phase == 3:
+            print "P3: Begin"
             self.sendNotify()
             self.battle()
             print "End of round %d"%self.round
@@ -1135,6 +1149,11 @@ class Server(object):
             self.sendPhase1()
             #print "Next Round: ",self.checkAllRespond()
             self.phaseTime = time.time()
+        else:
+            print "Phases",self.phase
+            print "Recv offers",self.recvOffers
+            print "Send offers",self.sentOffers
+
 
     def newGame(self):  #Will initize a new game to be played for the first time or again and set any variable and globals that need to be set inorder to do so
         for i in self.clientTable:
@@ -1211,14 +1230,23 @@ class Server(object):
                         curr = time.time()
                         if ((curr - self.phaseTime) > self.timeout) and (self.playingGame == True):
                             self.printRespond()
-                            for i in self.phaseRespond:
+                            copyData = self.phaseRespond
+                            for i in copyData:
                                 #waiting on this
-                                info = self.phaseRespond[i]
+                                info = copyData[i]
                                 if info[0] == False:
-                                    self.sendStrike(i,"timeout","Strike for timeout. Took %d needed less than %d "%(curr,self.timeout))
-
+                                    self.sendStrike(i,"timeout","Strike for timeout. Took %d needed less than %d "%(curr-self.phase,self.timeout))
+                                    #need to say they passed or declined
+                                    if self.phase == 1:
+                                        self.playerTable[i] = True
+                                    if self.phase == 2:
+                                        self.recvOffers = self.sentOffers
+                                        self.phaseRespond[s] = (True,'') 
+                            for i in self.removeList:
+                                del self.phaseRespond[i]
+                            self.removeList = {}
                             self.phaseTime = time.time()
-                            self.phase += 1
+                            #self.phase += 1
                             self.nextPhase()
                 else:
                     if self.clients >= self.minPlayers and self.playingGame == False:
@@ -1322,7 +1350,7 @@ class Server(object):
         self.server.close()
 
 if __name__ == "__main__":
-    t,l,m,f,g = 30,10,3,1000,"y"
+    t,l,m,f = 30,15,3,1000
     numArgs = len(sys.argv)
     if numArgs%2 == 0:
         print numArgs
@@ -1331,8 +1359,7 @@ if __name__ == "__main__":
     for x in range(1,numArgs):
         if (sys.argv[x] == '-t'):
             #print "-t Getting timeout length"
-            p = int(sys.argv[x+1])
-            #print "-t: ",t
+            t = int(sys.argv[x+1])
             x+=1
         elif (sys.argv[x] == '-l'):
             #print "-l Getting lobby waittime "

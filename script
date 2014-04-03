@@ -7,12 +7,12 @@ python byzantiumc.py -n KERRY -m &
 python byzantiumc.py -n JORDAN -m &
 python byzantiumc.py -n JASON -m &
 python byzantiumc.py -n HERB -m &
-python byzantiumc.py -n KEVIN -m &
+python byzantiumc.py -n NON1 -m &
 python byzantiumc.py -n PELE -m &
 python byzantiumc.py -n TRENT -m &
 python byzantiumc.py -n PAULA -m &
 python byzantiumc.py -n JORDY -m &
-python byzantiumc.py -n DERREK -m &
+python byzantiumc.py -n NON2 -m &
 python byzantiumc.py -n LOUIS -m &
 python byzantiumc.py -n BLAIN -m &
 python byzantiumc.py -n WALTER -m &
@@ -26,4 +26,4 @@ python byzantiumc.py -n LESTER -m &
 python byzantiumc.py -n PASS -m &
 python byzantiumc.py -n ATTACK -m &
 python byzantiumc.py -n CAROL -m &
-python byzantiumc.py -n MAY -m &
+python byzantiumc.py -n NON -m &

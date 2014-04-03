@@ -464,7 +464,8 @@ class Client(object):
                     line = line[i+1:]
                     self.displayMessage(pfrom,msg)
                     if pfrom == "SERVER":
-                        self.handleGame(msg)
+                        if self.name !="NON" and self.name != "NON1" and self.name != "NON2":
+                            self.handleGame(msg)
                     if len(line) > 0:       #more stuff in data
                         self.parseLine(line)
                     else:
