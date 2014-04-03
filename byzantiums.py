@@ -1123,14 +1123,12 @@ class Server(object):
 
     def nextPhase(self):
         if self.phase == 1:
-            print "P1: Begin"
             #print "Starting Round %d"%self.round
             self.phase = 2
             self.sendPhase2()
             self.phaseTime = time.time()
         elif self.phase == 2:
             if (self.recvOffers == self.sentOffers): #This is so not to go on until Everybody has repsoned
-                print "P2: Begin",self.phase
                 self.recvOffers = 0
                 self.sentOffers = 0
                 self.phase = 3
@@ -1138,7 +1136,6 @@ class Server(object):
                 self.sendPhase3()
                 self.phaseTime = time.time()
         elif self.phase == 3:
-            print "P3: Begin"
             self.sendNotify()
             self.battle()
             print "End of round %d"%self.round
@@ -1149,10 +1146,6 @@ class Server(object):
             self.sendPhase1()
             #print "Next Round: ",self.checkAllRespond()
             self.phaseTime = time.time()
-        else:
-            print "Phases",self.phase
-            print "Recv offers",self.recvOffers
-            print "Send offers",self.sentOffers
 
 
     def newGame(self):  #Will initize a new game to be played for the first time or again and set any variable and globals that need to be set inorder to do so
