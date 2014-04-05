@@ -1,5 +1,5 @@
 #Travis Eickmeyer
-#DATE: 3/18/14
+#DATE: 4/4/14
 #CLASS: CSCI 367
 #Project: Chat Server/Client
 #File: byzantiums.py
@@ -38,6 +38,7 @@ class Server(object):
         self.outputready = []
         self.inputs = []
         self.round = 0
+        self.StrikeNameBad = 0
         self.phase = 0
         self.phaseRespond = {}
         self.allyTable = []
@@ -60,6 +61,7 @@ class Server(object):
         self.attackList = []
         self.attackTable = {}
         self.defendTable = {}
+        self.offersTable = {}
         self.engagedTable = {}
         self.defeated = {}
         self.removeList = {}
@@ -197,7 +199,13 @@ class Server(object):
             print "| {:<14}:: {:^15} :: {:^6} :: {:^6} :: {:^5} :: {:^5}::  {:^5} ::  {:^5} :: {:^5} |".format(name,ip,port,strikes,units,offical,send,recv,numwins)
             #          name    add      port     strkes   units     joined   sento  recvfrom
         print "%d players on the server" %(self.clients)
-
+        print "Bad lookup errors:",self.StrikeNameBad
+        print "Recv->%s, Sent->%s"%(self.recvOffers,self.sentOffers)
+        print "Waiting on these players"
+        for g in self.offersTable:
+            print self.getName(g),"   ",self.offersTable[g]
+        print "*"*30   
+            
     def getStrikes(self,conn):
         info = self.clientTable[conn]
         strikes = info[2]
@@ -205,24 +213,30 @@ class Server(object):
         return strikes
 
     def sendStrike(self,conn,reason,comment):
+        ename = "#BADNAME#"
         try:
             snum = self.getStrikes(conn)
             snum += 1
             a,b,c,u,f,s,r,w = self.clientTable[conn]  #address, name , strikes,units,flags
+            ename = b
             self.clientTable[conn] = (a,b,snum,u,f,s,r,w)
         except LookupError, e:
+            self.StrikeNameBad += 1
             print "Strikes Loop up error:",conn,reason,comment
+            print "*"*30
+            print "*"*30
+            print "*"*30
+            print "*"*30
             snum = 1
         strike = "(strike(%d)(%s))" % (snum,reason)
         self.sending(conn,strike)
-        print "%s has received a %s strike Number %d: Comment: %s"%(self.getName(conn),reason,snum,comment)
+        print "%s has received a %s strike Number %d: Comment: %s"%(ename,reason,snum,comment)
         if snum >= 3:
             if snum >=3:
                 self.clients -=1
                 conn.close()
                 self.inputs.remove(conn)
                 self.outputs.remove(conn)
-                ename = self.getName(conn)
                 self.removeClient(conn)
                 self.sendallstat(True)
                 print "Disconnecting Client"
@@ -348,15 +362,15 @@ class Server(object):
             action = args[2]
             rnd = int(args[1])
             if phase != "PLAN":
-                self.sendStrike(s,"malformed","Phase 1: Did not give PLAN phase gave:%s"%(phase))
+                self.sendStrike(s,"malformed","Phase 1: Did not give PLAN phase gave:|%s|"%(phase))
                 #print "Assuming Player passes or see if they send again"
                 return False
             if action != "PASS":
-                self.sendStrike(s,"malformed","Phase 1: Did not give PASS gave:%s"%(action))
+                self.sendStrike(s,"malformed","Phase 1: Did not give PASS gave:|%s|"%(action))
                 #print "Assuming Player passes or see if they send again"
                 return False
             if rnd != self.round:
-                self.sendStrike(s,"malformed","Phase 1: Not the correct Round Number:%d"%(rnd))
+                self.sendStrike(s,"malformed","Phase 1: Not the correct Round Number:|%d|"%(rnd))
                 #print "Assuming Player passes or see if they send again"
                 return False
             #print "Player does not wish to make an allicance"
@@ -370,28 +384,28 @@ class Server(object):
             ally = args[3]
             attackee = args[4]
             if phase != "PLAN":
-                self.sendStrike(s,"malformed","Phase 1: Did not give PLAN phase gave:%s"%(phase))
+                self.sendStrike(s,"malformed","Phase 1: Did not give PLAN phase gave:|%s|"%(phase))
                 #print "Assuming Player passes or see if they send again"
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return False
             if action != "APPROACH":
-                self.sendStrike(s,"malformed","Phase 1: Did not give PASS gave:%s"%(action))
+                self.sendStrike(s,"malformed","Phase 1: Did not give PASS gave:|%s|"%(action))
                 #print "Assuming Player passes or see if they send again"
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return False
             if rnd != self.round:
-                self.sendStrike(s,"malformed","Phase 1: Not the correct Round Number:%d"%(rnd))
+                self.sendStrike(s,"malformed","Phase 1: Not the correct Round Number:|%d|"%(rnd))
                 #print "Assuming Player passes or see if they send again"
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return False
             if self.getConn(ally) not in self.alivePlayers:
                 #print ally,"not a valid ally"
-                self.sendStrike(s,"malformed","Phase 1: Did not give valid ally name gave:%s"%(ally))
+                self.sendStrike(s,"malformed","Phase 1: Did not give valid ally name gave:|%s|"%(ally))
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return True
             if self.getConn(attackee) not in self.alivePlayers:
                 #print attackee,"not a valid attackee"
-                self.sendStrike(s,"malformed","Phase 1: Did not give valid attackee name gave:%s"%(attackee))
+                self.sendStrike(s,"malformed","Phase 1: Did not give valid attackee name gave:|%s|"%(attackee))
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return True
             #Check if ally exist else send strike
@@ -411,7 +425,7 @@ class Server(object):
             #ally is
             return True
         else:
-            self.sendStrike(s,"malformed","Phase 1: Not the Correct number of Arguments:%d"%(len(args)))
+            self.sendStrike(s,"malformed","Phase 1: Not the Correct number of Arguments:|%d|"%(len(args)))
             #print "Assuming Player passes or see if they send again"
             return False
         return True
@@ -427,19 +441,25 @@ class Server(object):
             rnd = int(args[1])
             ally = args[2]
             if rnd != self.round:
-                self.sendStrike(s,"malformed %s"%msg,"Phase 2: Not the correct Round Number:%d"%(rnd))
+                self.sendStrike(s,"malformed %s"%msg,"Phase 2: Not the correct Round Number:|%d|"%(rnd))
                 #print "Bad Round number sent"
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return False
             if self.getConn(ally) not in self.alivePlayers:
                 #print ally,"not a valid ally"
-                self.sendStrike(s,"malformed","Phase 2: Did not give valid ally name gave:%s"%(ally))
+                self.sendStrike(s,"malformed","Phase 2: Did not give valid ally name gave:|%s|"%(ally))
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return True
             #check i ally is good. and has sent current client a ally message
             ######What happens if client accepts or rejects a an ally that they did not receive a ally message from or something.
             if decision == "ACCEPT":
                 self.recvOffers +=1
+                val = self.offersTable[s]
+                if val != 0:
+                    val -= 1
+                    self.offersTable[s] -= 1
+                if val == 0:
+                    del self.offersTable[s]
                 #inform origonal client of action
                 self.phaseRespond[s] = (True,"ACCEPT")
                 #print "%s Accepted allyship from ally:%s" %(self.getName(s),ally)
@@ -448,6 +468,12 @@ class Server(object):
                 self.sending(self.getConn(ally),line)
             elif decision == "DECLINE":
                 self.recvOffers +=1
+                val = self.offersTable[s]
+                if val != 0:
+                    val -= 1
+                    self.offersTable[s] -= 1
+                if val == 0:
+                    del self.offersTable[s]
                 self.phaseRespond[s] = (True,'DECLINE')
                 #inform origonal client of action
                 #print "%s Rejected allyship from ally:%s" %(self.getName(s),ally)
@@ -471,15 +497,15 @@ class Server(object):
             action = args[2]
             rnd = int(args[1])
             if phase != "ACTION":
-                self.sendStrike(s,"malformed","Phase 3: Did not give ACTION phase gave:%s"%(phase))
+                self.sendStrike(s,"malformed","Phase 3: Did not give ACTION phase gave:|%s|"%(phase))
                 #print "Assuming Player passes or see if they send again"
                 return False
             if action != "PASS":
-                self.sendStrike(s,"malformed","Phase 3: Did not give PASS gave:%s"%(action))
+                self.sendStrike(s,"malformed","Phase 3: Did not give PASS gave:|%s|"%(action))
                 #print "Assuming Player passes or see if they send again"
                 return False
             if rnd != self.round:
-                self.sendStrike(s,"malformed","Phase 3: Not the correct Round Number:%d"%(rnd))
+                self.sendStrike(s,"malformed","Phase 3: Not the correct Round Number:|%d|"%(rnd))
                 #print "Assuming Player passes or see if they send again"
                 return False
             #print "Player does not wish attack this turn"
@@ -491,17 +517,17 @@ class Server(object):
             rnd = int(args[1])
             attackee = args[3]
             if phase != "ACTION":
-                self.sendStrike(s,"malformed","Phase 3: Did not give ACTION phase gave:%s"%(phase))
+                self.sendStrike(s,"malformed","Phase 3: Did not give ACTION phase gave:|%s|"%(phase))
                 #print "Assuming Player passes or see if they send again"
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return False
             if rnd != self.round:
-                self.sendStrike(s,"malformed","Phase 3: Not the correct Round Number:%d"%(rnd))
+                self.sendStrike(s,"malformed","Phase 3: Not the correct Round Number:|%d|"%(rnd))
                 #print "Assuming Player passes or see if they send again"
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return False
             if action != "ATTACK":
-                self.sendStrike(s,"malformed","Phase 3: Did not give ATTACK gave:%s"%(action))
+                self.sendStrike(s,"malformed","Phase 3: Did not give ATTACK gave:|%s|"%(action))
                 #print "Assuming Player passes or see if they send again"
                 #self.phaseRespond[s] = (True,"ACTION PASS")
                 return False
@@ -565,6 +591,12 @@ class Server(object):
                 #print msg
                 self.sentOffers +=1
                 self.sending(s,msg)
+                if s in self.offersTable:
+                    val = self.offersTable[s]
+                    val += 1
+                    self.offersTable[s] = val
+                else:
+                    self.offersTable[s] = 1
                 #print "Phase 2:[%s] Got alliance message"%self.getName(s)
             #else:
                 #print "Player has been kicked recently got an alliance"
@@ -1129,12 +1161,17 @@ class Server(object):
             self.phaseTime = time.time()
         elif self.phase == 2:
             if (self.recvOffers == self.sentOffers): #This is so not to go on until Everybody has repsoned
+                self.offersTable = {}
                 self.recvOffers = 0
                 self.sentOffers = 0
                 self.phase = 3
                 self.zeroBattleTable()
                 self.sendPhase3()
                 self.phaseTime = time.time()
+            #else:
+                #print "R>%s, S<%s"%(self.recvOffers,self.sentOffers)
+                #for g in self.offersTable:
+                    #print self.getName(g),"   ",self.offersTable[g]
         elif self.phase == 3:
             self.sendNotify()
             self.battle()
@@ -1228,12 +1265,18 @@ class Server(object):
                                 #waiting on this
                                 info = copyData[i]
                                 if info[0] == False:
-                                    self.sendStrike(i,"timeout","Strike for timeout. Took %d needed less than %d "%(curr-self.phase,self.timeout))
+                                    self.sendStrike(i,"timeout","Strike for timeout. Took %d needed less than %d "%(curr-self.phaseTime,self.timeout))
                                     #need to say they passed or declined
+                                    print "R>%s, S<%s"%(self.recvOffers,self.sentOffers)
+                                    if i in self.offersTable:
+                                        offersrecv = self.offersTable[i]
+                                        self.recvOffers += offersrecv
+                                        print "Offers to Respond to",offersrecv," recv->%s,sent->%s"%(self.recvOffers,self.sentOffers)
+                                        del self.offersTable[i]
                                     if self.phase == 1:
                                         self.playerTable[i] = True
                                     if self.phase == 2:
-                                        self.recvOffers = self.sentOffers
+                                        #self.recvOffers = self.sentOffers
                                         self.phaseRespond[s] = (True,'') 
                             for i in self.removeList:
                                 del self.phaseRespond[i]

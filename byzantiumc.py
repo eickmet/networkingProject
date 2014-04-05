@@ -1,5 +1,5 @@
 #Travis Eickmeyer
-#DATE: 3/18/14
+#DATE: 4/4/14
 #CLASS: CSCI 367
 #Project: Chat Server/Client
 #File: byzantiumc.py
